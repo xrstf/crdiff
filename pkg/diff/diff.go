@@ -12,14 +12,36 @@ import (
 )
 
 type Change string
-type Diff map[string][]Change
+
+type Diff struct {
+	Unversioned []Change
+	Versioned   map[string][]Change
+}
+
+func (d *Diff) Empty() bool {
+	if d == nil {
+		return true
+	}
+
+	if len(d.Unversioned) > 0 {
+		return false
+	}
+
+	for _, changes := range d.Versioned {
+		if len(changes) > 0 {
+			return false
+		}
+	}
+
+	return true
+}
 
 type Options struct {
 	Versions     []string
 	BreakingOnly bool
 }
 
-func CompareCRDs(base, revision crd.CRD, opt Options) (Diff, error) {
+func CompareCRDs(base, revision crd.CRD, opt Options) (*Diff, error) {
 	if base.Identifier() != revision.Identifier() {
 		return nil, fmt.Errorf("cannot compare to different CRDs (%q vs. %q)", base.Identifier(), revision.Identifier())
 	}
@@ -36,12 +58,15 @@ func CompareCRDs(base, revision crd.CRD, opt Options) (Diff, error) {
 	}
 	revisionVersionMap := limitVersions(revisionVersions, opt.Versions)
 
-	result := Diff{
-		"": []Change{},
+	result := &Diff{
+		Unversioned: []Change{},
+		Versioned:   map[string][]Change{},
 	}
 
 	if base.Scope() != revision.Scope() {
-		result[""] = append(result[""], Change(fmt.Sprintf("changed Scope from %q to %q", base.Scope(), revision.Scope())))
+		result.Unversioned = append(result.Unversioned,
+			Change(fmt.Sprintf("changed scope from %q to %q", base.Scope(), revision.Scope())),
+		)
 	}
 
 	oasConfig := oasdiff.NewConfig()
@@ -49,7 +74,7 @@ func CompareCRDs(base, revision crd.CRD, opt Options) (Diff, error) {
 
 	for _, version := range sets.List(baseVersionMap) {
 		if !revisionVersionMap.Has(version) {
-			result[version] = []Change{
+			result.Versioned[version] = []Change{
 				Change("version has been removed"),
 			}
 			continue
@@ -68,7 +93,9 @@ func CompareCRDs(base, revision crd.CRD, opt Options) (Diff, error) {
 			continue
 		}
 
-		result[version] = append(result[version], Change(fmt.Sprintf("%v", schemaChanges)))
+		result.Versioned[version] = []Change{
+			Change(fmt.Sprintf("%v", schemaChanges)),
+		}
 	}
 
 	for _, version := range sets.List(revisionVersionMap) {
@@ -77,7 +104,7 @@ func CompareCRDs(base, revision crd.CRD, opt Options) (Diff, error) {
 			continue
 		}
 
-		result[version] = []Change{
+		result.Versioned[version] = []Change{
 			Change("version has been added"),
 		}
 	}

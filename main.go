@@ -5,7 +5,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -77,4 +79,11 @@ func createLogger(cmd *cobra.Command, globalOpts *globalOptions) *logrus.Logger 
 	cmd.SetContext(context.WithValue(cmd.Context(), loggerCtxKey, logger))
 
 	return logger
+}
+
+func heading(s, u string, padding int) {
+	pad := strings.Repeat(" ", padding)
+
+	fmt.Println(pad + s)
+	fmt.Println(pad + strings.Repeat(u, len(s)))
 }

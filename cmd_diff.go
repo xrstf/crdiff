@@ -6,9 +6,12 @@ package main
 import (
 	"fmt"
 
+	"go.xrstf.de/crdiff/pkg/crd"
 	"go.xrstf.de/crdiff/pkg/diff"
 	"go.xrstf.de/crdiff/pkg/loader"
+	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -26,8 +29,6 @@ func DiffCommand(globalOpts *globalOptions) *cobra.Command {
 
 	return cmd
 }
-
-type filesChanges map[string]diff.Diff
 
 func DiffRunE(globalOpts *globalOptions, cmdOpts *isRunningOptions) cobraFuncE {
 	return handleErrors(func(cmd *cobra.Command, args []string) error {
@@ -51,52 +52,37 @@ func DiffRunE(globalOpts *globalOptions, cmdOpts *isRunningOptions) cobraFuncE {
 			return fmt.Errorf("failed loading revision CRDs: %v", err)
 		}
 
-		diffs := filesChanges{}
-		diffOpt := diff.Options{}
-
 		log.Debug("Comparing CRDs…")
-		for identifier, baseCRD := range baseCRDs {
-
-			revisionCRD, exists := revisionCRDs[identifier]
-			if !exists {
-				diffs[identifier] = diff.Diff{
-					"": []diff.Change{
-						diff.Change("CRD has been removed"),
-					},
-				}
-
-				continue
-			}
-
-			crdChanges, err := diff.CompareCRDs(baseCRD, revisionCRD, diffOpt)
-			if err != nil {
-				return fmt.Errorf("failed to compare %q: %w", identifier, err)
-			}
-
-			if crdChanges != nil {
-				diffs[identifier] = crdChanges
-			}
+		report, err := compareCRDs(log, baseCRDs, revisionCRDs)
+		if err != nil {
+			return fmt.Errorf("failed comparing CRDs: %v", err)
 		}
 
-		if len(diffs) == 0 {
+		if report.Empty() {
 			log.Info("No changes detected.")
 			return nil
 		}
 
-		for identifier, changesPerVersion := range diffs {
-			fmt.Println(identifier)
+		sortedIdentifiers := sets.List(sets.KeySet(report.Changes))
 
-			nonVersionChanges, exist := changesPerVersion[""]
-			if exist && len(nonVersionChanges) > 0 {
-				for _, change := range nonVersionChanges {
-					fmt.Printf("  * %s\n", change)
-				}
-				fmt.Println("")
+		for _, crdIdentifier := range sortedIdentifiers {
+			crdChanges := report.Changes[crdIdentifier]
+
+			if crdChanges.Empty() {
+				continue
 			}
 
-			delete(changesPerVersion, "")
-			for version, versionChanges := range changesPerVersion {
-				fmt.Printf("  %s\n", version)
+			heading(crdIdentifier, "=", 0)
+
+			if len(crdChanges.Unversioned) > 0 {
+				for _, change := range crdChanges.Unversioned {
+					fmt.Printf("  * %s\n", change)
+				}
+			}
+			fmt.Println("")
+
+			for version, versionChanges := range crdChanges.Versioned {
+				heading(version, "-", 2)
 
 				for _, change := range versionChanges {
 					fmt.Printf("    * %s\n", change)
@@ -107,4 +93,35 @@ func DiffRunE(globalOpts *globalOptions, cmdOpts *isRunningOptions) cobraFuncE {
 
 		return nil
 	})
+}
+
+func compareCRDs(log logrus.FieldLogger, baseCRDs, revisionCRDs map[string]crd.CRD) (*DiffReport, error) {
+	report := &DiffReport{
+		Changes: map[string]diff.Diff{},
+	}
+	diffOpt := diff.Options{}
+
+	for crdIdentifier, baseCRD := range baseCRDs {
+		revisionCRD, exists := revisionCRDs[crdIdentifier]
+		if !exists {
+			report.Changes[crdIdentifier] = diff.Diff{
+				Unversioned: []diff.Change{
+					diff.Change("CRD has been removed"),
+				},
+			}
+
+			continue
+		}
+
+		crdChanges, err := diff.CompareCRDs(baseCRD, revisionCRD, diffOpt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compare %q: %w", crdIdentifier, err)
+		}
+
+		if crdChanges != nil {
+			report.Changes[crdIdentifier] = *crdChanges
+		}
+	}
+
+	return report, nil
 }
