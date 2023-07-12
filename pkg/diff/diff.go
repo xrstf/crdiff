@@ -8,6 +8,7 @@ import (
 
 	"go.xrstf.de/crdiff/pkg/crd"
 	"go.xrstf.de/crdiff/pkg/diff/oasdiff"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 

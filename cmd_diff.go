@@ -6,13 +6,14 @@ package main
 import (
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
 	"go.xrstf.de/crdiff/pkg/crd"
 	"go.xrstf.de/crdiff/pkg/diff"
 	"go.xrstf.de/crdiff/pkg/loader"
-	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type isRunningOptions struct{}
