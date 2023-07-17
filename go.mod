@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/getkin/kin-openapi v0.118.0
+	github.com/gookit/color v1.5.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.7.0
 	github.com/tufin/oasdiff v1.5.20
@@ -29,6 +30,7 @@ require (
 	github.com/perimeterx/marshmallow v1.1.4 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect

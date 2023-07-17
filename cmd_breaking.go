@@ -12,22 +12,22 @@ import (
 	"go.xrstf.de/crdiff/pkg/loader"
 )
 
-type diffCmdOptions struct{}
+type breakingCmdOptions struct{}
 
-func DiffCommand(globalOpts *globalOptions) *cobra.Command {
-	cmdOpts := diffCmdOptions{}
+func BreakingCommand(globalOpts *globalOptions) *cobra.Command {
+	cmdOpts := breakingCmdOptions{}
 
 	cmd := &cobra.Command{
-		Use:          "diff BASE REVISION",
-		Short:        "Compare two or more CRD files/directories and print the differences",
-		RunE:         DiffRunE(globalOpts, &cmdOpts),
+		Use:          "breaking BASE REVISION",
+		Short:        "Compare two or more CRD files/directories and print all breaking differences",
+		RunE:         BreakingRunE(globalOpts, &cmdOpts),
 		SilenceUsage: true,
 	}
 
 	return cmd
 }
 
-func DiffRunE(globalOpts *globalOptions, cmdOpts *diffCmdOptions) cobraFuncE {
+func BreakingRunE(globalOpts *globalOptions, cmdOpts *breakingCmdOptions) cobraFuncE {
 	return handleErrors(func(cmd *cobra.Command, args []string) error {
 		if len(args) < 2 {
 			return cmd.Help()
@@ -48,7 +48,9 @@ func DiffRunE(globalOpts *globalOptions, cmdOpts *diffCmdOptions) cobraFuncE {
 		}
 
 		log.Debug("Comparing CRDs…")
-		diffOpt := diff.Options{}
+		diffOpt := diff.Options{
+			BreakingOnly: true,
+		}
 		report, err := compareCRDs(log, baseCRDs, revisionCRDs, diffOpt)
 		if err != nil {
 			return fmt.Errorf("failed comparing CRDs: %v", err)

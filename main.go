@@ -5,23 +5,29 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
-	"strings"
 
+	"github.com/gookit/color"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 type globalOptions struct {
-	verbose bool
+	verbose    bool
+	forceColor bool
+	noColor    bool
 }
 
 type cobraFuncE func(cmd *cobra.Command, args []string) error
 
+var (
+	log logrus.FieldLogger
+)
+
 func main() {
 	opts := globalOptions{}
-	ctx := context.Background() // signals.SetupSignalHandler()
+	ctx := context.Background()
 
 	rootCmd := &cobra.Command{
 		Use:           "crdiff",
@@ -43,9 +49,32 @@ func main() {
 	})
 
 	rootCmd.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "enable verbose logging")
+	rootCmd.PersistentFlags().BoolVar(&opts.forceColor, "color", false, "enable colored output (can also use $FORCE_COLOR)")
+	rootCmd.PersistentFlags().BoolVar(&opts.noColor, "no-color", false, "disable colored output (can also use $NO_COLOR)")
+
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if opts.forceColor && opts.noColor {
+			return errors.New("cannot combine --no-color with --color")
+		}
+
+		if opts.forceColor {
+			color.Enable = true
+		} else if opts.noColor {
+			color.Enable = false
+		}
+
+		logger := logrus.New()
+		if opts.verbose {
+			logger.SetLevel(logrus.DebugLevel)
+		}
+		log = logger
+
+		return nil
+	}
 
 	rootCmd.AddCommand(
 		DiffCommand(&opts),
+		BreakingCommand(&opts),
 	)
 
 	// we don't need this
@@ -56,34 +85,13 @@ func main() {
 	}
 }
 
-const loggerCtxKey = iota
-
 func handleErrors(action cobraFuncE) cobraFuncE {
 	return func(cmd *cobra.Command, args []string) error {
 		err := action(cmd, args)
 		if err != nil {
-			log := cmd.Context().Value(loggerCtxKey).(logrus.FieldLogger)
 			log.Errorf("Operation failed: %v.", err)
 		}
 
 		return err
 	}
-}
-
-func createLogger(cmd *cobra.Command, globalOpts *globalOptions) *logrus.Logger {
-	logger := logrus.New()
-	if globalOpts.verbose {
-		logger.SetLevel(logrus.DebugLevel)
-	}
-
-	cmd.SetContext(context.WithValue(cmd.Context(), loggerCtxKey, logger))
-
-	return logger
-}
-
-func heading(s, u string, padding int) {
-	pad := strings.Repeat(" ", padding)
-
-	fmt.Println(pad + s)
-	fmt.Println(pad + strings.Repeat(u, len(s)))
 }

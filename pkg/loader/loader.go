@@ -113,6 +113,9 @@ func loadCRDsFromFile(source string, logFullFilename bool, opt *Options, log log
 
 		crdObj, err := parseYAML(buf[:read])
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				continue
+			}
 			return nil, fmt.Errorf("document %d is invalid: %w", i, err)
 		}
 
