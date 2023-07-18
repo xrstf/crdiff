@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 Christoph Mewes
+// SPDX-License-Identifier: MIT
+
 package colors
 
 import "github.com/gookit/color"

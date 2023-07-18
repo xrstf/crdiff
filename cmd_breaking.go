@@ -58,10 +58,12 @@ func BreakingRunE(globalOpts *globalOptions, cmdOpts *breakingCmdOptions) cobraF
 
 		if report.Empty() {
 			log.Info("No changes detected.")
-			return nil
+			// do not return, still print the report on stdout so we still
+			// produce valid JSON in case --output=json is given.
+			// return nil
 		}
 
-		report.Print()
+		outputReport(log, report, globalOpts.output)
 
 		return nil
 	})

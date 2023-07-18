@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/gookit/color"
@@ -13,10 +14,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	outputFormatText = "text"
+	outputFormatJSON = "json"
+)
+
 type globalOptions struct {
 	verbose    bool
 	forceColor bool
 	noColor    bool
+	output     string
 }
 
 type cobraFuncE func(cmd *cobra.Command, args []string) error
@@ -40,6 +47,7 @@ func main() {
 	// so would always show the Usage, no matter what error occurred. To work around this, we
 	// set SilenceUsages on all commands and manually print the error using the FlagErrorFunc.
 	rootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
+		fmt.Println(err)
 		if err := c.Usage(); err != nil {
 			return err
 		}
@@ -51,10 +59,36 @@ func main() {
 	rootCmd.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "enable verbose logging")
 	rootCmd.PersistentFlags().BoolVar(&opts.forceColor, "color", false, "enable colored output (can also use $FORCE_COLOR)")
 	rootCmd.PersistentFlags().BoolVar(&opts.noColor, "no-color", false, "disable colored output (can also use $NO_COLOR)")
+	rootCmd.PersistentFlags().StringVarP(&opts.output, "output", "o", "text", "output format (one of [text, json])")
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		// We silence errors so we can have full control over their handling,
+		// but this means nobody is processing the error returned from this
+		// function; so instead we print it ourselves and just return it to
+		// make cobra exit with 1.
+		fail := func(err error) error {
+			log.Errorf("Invalid flags: %v.", err)
+			return err
+		}
+
+		// init logger as early as possible, as any error handling depends on it
+		logger := logrus.New()
+		if opts.verbose {
+			logger.SetLevel(logrus.DebugLevel)
+		}
+		log = logger
+
+		switch opts.output {
+		case outputFormatText:
+			// NOP
+		case outputFormatJSON:
+			logger.SetFormatter(&logrus.JSONFormatter{})
+		default:
+			return fail(fmt.Errorf("unknown output format %q", opts.output))
+		}
+
 		if opts.forceColor && opts.noColor {
-			return errors.New("cannot combine --no-color with --color")
+			return fail(errors.New("cannot combine --no-color with --color"))
 		}
 
 		if opts.forceColor {
@@ -62,12 +96,6 @@ func main() {
 		} else if opts.noColor {
 			color.Enable = false
 		}
-
-		logger := logrus.New()
-		if opts.verbose {
-			logger.SetLevel(logrus.DebugLevel)
-		}
-		log = logger
 
 		return nil
 	}

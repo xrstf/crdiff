@@ -56,10 +56,12 @@ func DiffRunE(globalOpts *globalOptions, cmdOpts *diffCmdOptions) cobraFuncE {
 
 		if report.Empty() {
 			log.Info("No changes detected.")
-			return nil
+			// do not return, still print the report on stdout so we still
+			// produce valid JSON in case --output=json is given.
+			// return nil
 		}
 
-		report.Print()
+		outputReport(log, report, globalOpts.output)
 
 		return nil
 	})

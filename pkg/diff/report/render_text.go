@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2023 Christoph Mewes
 // SPDX-License-Identifier: MIT
 
-package main
+package report
 
 import (
 	"fmt"
@@ -10,30 +10,11 @@ import (
 	oasdiffdiff "github.com/tufin/oasdiff/diff"
 
 	"go.xrstf.de/crdiff/pkg/colors"
-	"go.xrstf.de/crdiff/pkg/diff"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-type DiffReport struct {
-	Diffs map[string]diff.CRDDiff
-}
-
-func (r *DiffReport) Empty() bool {
-	if r == nil {
-		return true
-	}
-
-	for _, change := range r.Diffs {
-		if !change.Empty() {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (r *DiffReport) Print() {
+func (r *Report) Print() {
 	sortedIdentifiers := sets.List(sets.KeySet(r.Diffs))
 
 	for _, crdIdentifier := range sortedIdentifiers {
@@ -50,16 +31,22 @@ func (r *DiffReport) Print() {
 		if len(crdChanges.General) > 0 {
 			extraLine = true
 			for _, change := range crdChanges.General {
-				fmt.Printf("  ~ %s\n", change.Modification)
+				fmt.Printf("  ~ %s\n", change.Description)
 			}
 		}
 
-		for _, version := range sets.List(crdChanges.Versions.AddedVersions) {
+		if crdChanges.Versions.Empty() {
+			fmt.Println("")
+			fmt.Println("")
+			continue
+		}
+
+		for _, version := range crdChanges.Versions.AddedVersions {
 			extraLine = true
 			fmt.Printf("  + %s %s\n", colors.ActionAdd.Render("added"), colors.Version.Render(version))
 		}
 
-		for _, version := range sets.List(crdChanges.Versions.DeletedVersions) {
+		for _, version := range crdChanges.Versions.DeletedVersions {
 			extraLine = true
 			fmt.Printf("  - %s %s\n", colors.ActionRemove.Render("removed"), colors.Version.Render(version))
 		}
@@ -80,11 +67,11 @@ func (r *DiffReport) Print() {
 
 				fmt.Printf("    > %s:\n", colors.Path.Render(path))
 
-				for _, field := range sets.List(pathChanges.AddedProperties) {
+				for _, field := range pathChanges.AddedProperties {
 					fmt.Printf("      + %s %s\n", colors.ActionAdd.Render("added"), colors.Property.Render(field))
 				}
 
-				for _, field := range sets.List(pathChanges.DeletedProperties) {
+				for _, field := range pathChanges.DeletedProperties {
 					fmt.Printf("      - %s %s\n", colors.ActionRemove.Render("removed"), colors.Property.Render(field))
 				}
 
