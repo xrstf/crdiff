@@ -7,20 +7,21 @@ import (
 	"fmt"
 	"strings"
 
-	oasdiffdiff "github.com/tufin/oasdiff/diff"
+	"github.com/tufin/oasdiff/diff"
 
 	"go.xrstf.de/crdiff/pkg/colors"
+	"go.xrstf.de/crdiff/pkg/compare"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func (r *Report) Print() {
+func (r *Report) Print(breakingOnly bool) {
 	sortedIdentifiers := sets.List(sets.KeySet(r.Diffs))
 
 	for _, crdIdentifier := range sortedIdentifiers {
 		crdChanges := r.Diffs[crdIdentifier]
 
-		if crdChanges.Empty() {
+		if !shouldPrintCRD(crdChanges, breakingOnly) {
 			continue
 		}
 
@@ -35,18 +36,14 @@ func (r *Report) Print() {
 			}
 		}
 
-		if crdChanges.Versions.Empty() {
-			fmt.Println("")
-			fmt.Println("")
-			continue
+		if !breakingOnly {
+			for _, version := range crdChanges.AddedVersions {
+				extraLine = true
+				fmt.Printf("  + %s %s\n", colors.ActionAdd.Render("added"), colors.Version.Render(version))
+			}
 		}
 
-		for _, version := range crdChanges.Versions.AddedVersions {
-			extraLine = true
-			fmt.Printf("  + %s %s\n", colors.ActionAdd.Render("added"), colors.Version.Render(version))
-		}
-
-		for _, version := range crdChanges.Versions.DeletedVersions {
+		for _, version := range crdChanges.DeletedVersions {
 			extraLine = true
 			fmt.Printf("  - %s %s\n", colors.ActionRemove.Render("removed"), colors.Version.Render(version))
 		}
@@ -55,15 +52,19 @@ func (r *Report) Print() {
 			fmt.Println("")
 		}
 
-		changedVersions := sets.List(sets.KeySet(crdChanges.Versions.ChangedVersions))
+		changedVersions := sets.List(sets.KeySet(crdChanges.ChangedVersions))
 		for _, version := range changedVersions {
+			versionDiff := crdChanges.ChangedVersions[version]
+			if !shouldPrintCRDVersion(versionDiff, breakingOnly) {
+				continue
+			}
+
 			heading(version, "-", 2, "version")
 
-			versionSchemasDiff := crdChanges.Versions.ChangedVersions[version]
-			changedPaths := sets.List(sets.KeySet(versionSchemasDiff))
+			changedPaths := sets.List(sets.KeySet(versionDiff.SchemaChanges))
 
 			for _, path := range changedPaths {
-				pathChanges := versionSchemasDiff[path]
+				pathChanges := versionDiff.SchemaChanges[path]
 
 				fmt.Printf("    > %s:\n", colors.Path.Render(path))
 
@@ -83,8 +84,28 @@ func (r *Report) Print() {
 			}
 
 			fmt.Println("")
+
+			for _, b := range versionDiff.BreakingChanges {
+				fmt.Println(b)
+			}
 		}
 	}
+}
+
+func shouldPrintCRD(d compare.CRDDiff, breakingOnly bool) bool {
+	if breakingOnly {
+		return d.HasBreakingChanges()
+	}
+
+	return d.HasChanges()
+}
+
+func shouldPrintCRDVersion(d compare.CRDVersionDiff, breakingOnly bool) bool {
+	if breakingOnly {
+		return d.HasBreakingChanges()
+	}
+
+	return d.HasChanges()
 }
 
 func heading(s, u string, padding int, style string) {
@@ -100,7 +121,7 @@ func heading(s, u string, padding int, style string) {
 	fmt.Println(pad + line)
 }
 
-func printSchemaDiff(diff *oasdiffdiff.SchemaDiff, padding string) {
+func printSchemaDiff(diff *diff.SchemaDiff, padding string) {
 	if diff.ExtensionsDiff != nil {
 		fmt.Printf("%sExtensionsDiff: %#v\n", padding, diff.ExtensionsDiff)
 	}
@@ -231,7 +252,7 @@ func isEmpty(s string) bool {
 	return s == "" || s == "<nil>"
 }
 
-func printValueDiff(attribute string, diff *oasdiffdiff.ValueDiff, padding string) {
+func printValueDiff(attribute string, diff *diff.ValueDiff, padding string) {
 	from := fmt.Sprintf("%v", diff.From)
 
 	if isEmpty(from) {

@@ -10,21 +10,22 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"go.xrstf.de/crdiff/pkg/compare"
+	"go.xrstf.de/crdiff/pkg/compare/report"
 	"go.xrstf.de/crdiff/pkg/crd"
-	"go.xrstf.de/crdiff/pkg/diff"
-	"go.xrstf.de/crdiff/pkg/diff/report"
 )
 
-func compareCRDs(log logrus.FieldLogger, baseCRDs, revisionCRDs map[string]crd.CRD, diffOpt diff.Options) (*report.Report, error) {
+func compareCRDs(log logrus.FieldLogger, baseCRDs, revisionCRDs map[string]crd.CRD, diffOpt compare.CompareOptions) (*report.Report, error) {
 	report := &report.Report{
-		Diffs: map[string]diff.CRDDiff{},
+		Diffs: map[string]compare.CRDDiff{},
 	}
 
 	for crdIdentifier, baseCRD := range baseCRDs {
 		revisionCRD, exists := revisionCRDs[crdIdentifier]
 		if !exists {
-			report.Diffs[crdIdentifier] = diff.CRDDiff{
-				General: []diff.Change{{
+			report.Diffs[crdIdentifier] = compare.CRDDiff{
+				General: []compare.Change{{
+					Breaking:    true,
 					Description: "CRD has been removed",
 				}},
 			}
@@ -32,12 +33,12 @@ func compareCRDs(log logrus.FieldLogger, baseCRDs, revisionCRDs map[string]crd.C
 			continue
 		}
 
-		crdChanges, err := diff.CompareCRDs(baseCRD, revisionCRD, diffOpt)
+		crdChanges, err := compare.CompareCRDs(baseCRD, revisionCRD, diffOpt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compare %q: %w", crdIdentifier, err)
 		}
 
-		if !crdChanges.Empty() {
+		if crdChanges.HasChanges() {
 			report.Diffs[crdIdentifier] = *crdChanges
 		}
 	}
@@ -48,7 +49,7 @@ func compareCRDs(log logrus.FieldLogger, baseCRDs, revisionCRDs map[string]crd.C
 func outputReport(log logrus.FieldLogger, report *report.Report, format string) {
 	switch format {
 	case outputFormatText:
-		report.Print()
+		report.Print(true)
 	case outputFormatJSON:
 		json.NewEncoder(os.Stdout).Encode(report)
 	default:

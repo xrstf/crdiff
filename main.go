@@ -8,11 +8,29 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
+	"strings"
 
 	"github.com/gookit/color"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
+
+// Project build specific vars
+var (
+	Tag    string
+	Commit string
+)
+
+func printVersion() {
+	fmt.Printf(
+		"version: %s\nbuilt with: %s\ntag: %s\ncommit: %s\n",
+		strings.TrimPrefix(Tag, "v"),
+		runtime.Version(),
+		Tag,
+		Commit,
+	)
+}
 
 const (
 	outputFormatText = "text"

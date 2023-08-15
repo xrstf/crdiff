@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.xrstf.de/crdiff/pkg/diff"
+	"go.xrstf.de/crdiff/pkg/compare"
 	"go.xrstf.de/crdiff/pkg/loader"
 )
 
@@ -48,7 +48,7 @@ func BreakingRunE(globalOpts *globalOptions, cmdOpts *breakingCmdOptions) cobraF
 		}
 
 		log.Debug("Comparing CRDs…")
-		diffOpt := diff.Options{
+		diffOpt := compare.CompareOptions{
 			BreakingOnly: true,
 		}
 		report, err := compareCRDs(log, baseCRDs, revisionCRDs, diffOpt)
@@ -56,7 +56,7 @@ func BreakingRunE(globalOpts *globalOptions, cmdOpts *breakingCmdOptions) cobraF
 			return fmt.Errorf("failed comparing CRDs: %v", err)
 		}
 
-		if report.Empty() {
+		if !report.HasChanges() {
 			log.Info("No changes detected.")
 			// do not return, still print the report on stdout so we still
 			// produce valid JSON in case --output=json is given.

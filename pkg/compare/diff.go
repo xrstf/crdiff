@@ -1,79 +1,27 @@
 // SPDX-FileCopyrightText: 2023 Christoph Mewes
 // SPDX-License-Identifier: MIT
 
-package diff
+package compare
 
 import (
 	"fmt"
 
+	"github.com/tufin/oasdiff/checker"
 	"github.com/tufin/oasdiff/diff"
 	"github.com/tufin/oasdiff/utils"
 
+	"go.xrstf.de/crdiff/pkg/compare/oasdiff"
 	"go.xrstf.de/crdiff/pkg/crd"
-	"go.xrstf.de/crdiff/pkg/diff/oasdiff"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-type Change struct {
-	Description string `json:"description,omitempty"`
-}
-
-type CRDDiff struct {
-	General  []Change        `json:"generalChanges,omitempty"`
-	Versions *CRDVersionDiff `json:"versions,omitempty"`
-}
-
-type CRDVersionDiff struct {
-	AddedVersions   utils.StringList          `json:"added,omitempty"`
-	DeletedVersions utils.StringList          `json:"deleted,omitempty"`
-	ChangedVersions map[string]CRDSchemasDiff `json:"changed,omitempty"`
-}
-
-func (d *CRDVersionDiff) Empty() bool {
-	if d == nil {
-		return true
-	}
-
-	if d.AddedVersions.Len() > 0 || d.DeletedVersions.Len() > 0 {
-		return false
-	}
-
-	for _, versionDiff := range d.ChangedVersions {
-		if len(versionDiff) > 0 {
-			return false
-		}
-	}
-
-	return true
-}
-
-type CRDSchemasDiff map[string]CRDSchemaDiff
-
-type CRDSchemaDiff struct {
-	AddedProperties   utils.StringList `json:"added,omitempty"`
-	DeletedProperties utils.StringList `json:"changed,omitempty"`
-	Diff              *diff.SchemaDiff `json:"changes,omitempty"`
-}
-
-func (d *CRDDiff) Empty() bool {
-	if d == nil {
-		return true
-	}
-
-	if len(d.General) > 0 {
-		return false
-	}
-
-	return d.Versions.Empty()
-}
-
-type Options struct {
+type CompareOptions struct {
 	Versions     []string
 	BreakingOnly bool
 }
 
-func CompareCRDs(base, revision crd.CRD, opt Options) (*CRDDiff, error) {
+func CompareCRDs(base, revision crd.CRD, opt CompareOptions) (*CRDDiff, error) {
 	if base.Identifier() != revision.Identifier() {
 		return nil, fmt.Errorf("cannot compare to different CRDs (%q vs. %q)", base.Identifier(), revision.Identifier())
 	}
@@ -91,45 +39,48 @@ func CompareCRDs(base, revision crd.CRD, opt Options) (*CRDDiff, error) {
 	revisionVersionMap := limitVersions(revisionVersions, opt.Versions)
 
 	result := &CRDDiff{
-		General: []Change{},
-	}
-
-	versionDiff := CRDVersionDiff{
+		General:         []Change{},
 		AddedVersions:   utils.StringList{},
 		DeletedVersions: utils.StringList{},
-		ChangedVersions: map[string]CRDSchemasDiff{},
+		ChangedVersions: map[string]CRDVersionDiff{},
 	}
+
+	// detect general, non-schema related changes
 
 	if base.Scope() != revision.Scope() {
 		result.General = append(result.General, Change{
+			Breaking:    true,
 			Description: fmt.Sprintf("changed scope from %q to %q", base.Scope(), revision.Scope()),
 		})
 	}
 
+	// compare schemas
+
 	oasConfig := oasdiff.NewConfig()
-	oasConfig.BreakingOnly = opt.BreakingOnly
 
 	for _, version := range sets.List(baseVersionMap) {
 		if !revisionVersionMap.Has(version) {
-			versionDiff.DeletedVersions = append(versionDiff.DeletedVersions, version)
+			result.DeletedVersions = append(result.DeletedVersions, version)
 			continue
 		}
 
 		baseSchema := base.Schema(version)
 		revisionSchema := revision.Schema(version)
 
-		schemaChanges, err := oasdiff.CompareSchemas(oasConfig, baseSchema, revisionSchema)
+		completeDiff, breakingChanges, err := oasdiff.CompareSchemas(oasConfig, baseSchema, revisionSchema)
 		if err != nil {
 			return nil, fmt.Errorf("failed comparing version %v: %w", version, err)
 		}
 
 		// no changes in this version :)
-		if schemaChanges == nil {
+		if completeDiff == nil {
 			continue
 		}
 
-		versionDiff.ChangedVersions[version] = createCRDSchemasDiff(schemaChanges)
+		result.ChangedVersions[version] = createCRDVersionDiff(completeDiff, breakingChanges)
 	}
+
+	// detect newly added versions in this CRD
 
 	for _, version := range sets.List(revisionVersionMap) {
 		// we already compared base and revision
@@ -138,24 +89,21 @@ func CompareCRDs(base, revision crd.CRD, opt Options) (*CRDDiff, error) {
 		}
 
 		if !opt.BreakingOnly {
-			versionDiff.AddedVersions = append(versionDiff.AddedVersions, version)
+			result.AddedVersions = append(result.AddedVersions, version)
 		}
 	}
 
-	versionDiff.AddedVersions.Sort()
-	versionDiff.DeletedVersions.Sort()
-
-	if !versionDiff.Empty() {
-		result.Versions = &versionDiff
-	}
+	result.AddedVersions.Sort()
+	result.DeletedVersions.Sort()
 
 	return result, nil
 }
 
-func createCRDSchemasDiff(diff *diff.SchemaDiff) CRDSchemasDiff {
-	result := CRDSchemasDiff{}
-
-	// printSchemaDiff(diff)
+func createCRDVersionDiff(diff *diff.SchemaDiff, breaking checker.Changes) CRDVersionDiff {
+	result := CRDVersionDiff{
+		SchemaChanges:   map[string]CRDSchemaDiff{},
+		BreakingChanges: breaking,
+	}
 
 	collectChangesFromSchemaDiff(result, diff, "")
 
@@ -194,7 +142,9 @@ func hasLeafDiff(diff *diff.SchemaDiff) bool {
 		diff.PatternDiff != nil ||
 		diff.MinItemsDiff != nil ||
 		diff.MaxItemsDiff != nil ||
+		// diff.ItemsDiff is not considered a leaf
 		diff.RequiredDiff != nil ||
+		// diff.PropertiesDiff is not considered a leaf
 		diff.MinPropsDiff != nil ||
 		diff.MaxPropsDiff != nil ||
 		diff.AdditionalPropertiesDiff != nil ||
@@ -209,10 +159,16 @@ func rootPath(path string) string {
 	return path
 }
 
-func collectChangesFromSchemaDiff(result CRDSchemasDiff, sd *diff.SchemaDiff, path string) {
+func collectChangesFromSchemaDiff(result CRDVersionDiff, sd *diff.SchemaDiff, path string) {
 	if hasLeafDiff(sd) {
-		result[rootPath(path)] = CRDSchemaDiff{
-			Diff: sd,
+		// strip Items- & Properties Diff, as those are treated differently
+		// and should not show up twice in the resulting diff
+		copied := oasdiff.DeepCopySchemaDiff(sd)
+		copied.PropertiesDiff = nil
+		copied.ItemsDiff = nil
+
+		result.SchemaChanges[rootPath(path)] = CRDSchemaDiff{
+			Diff: copied,
 		}
 	}
 
@@ -225,13 +181,13 @@ func collectChangesFromSchemaDiff(result CRDSchemasDiff, sd *diff.SchemaDiff, pa
 	}
 }
 
-func collectChangesFromSchemasDiff(result CRDSchemasDiff, sd *diff.SchemasDiff, path string) {
+func collectChangesFromSchemasDiff(result CRDVersionDiff, sd *diff.SchemasDiff, path string) {
 	if len(sd.Added) > 0 || len(sd.Deleted) > 0 {
-		schemaDiff := result[rootPath(path)] // rely on Go's runtime defaulting for non-existing keys
+		schemaDiff := result.SchemaChanges[rootPath(path)] // rely on Go's runtime defaulting for non-existing keys
 		schemaDiff.AddedProperties = sd.Added
 		schemaDiff.DeletedProperties = sd.Deleted
 
-		result[rootPath(path)] = schemaDiff
+		result.SchemaChanges[rootPath(path)] = schemaDiff
 	}
 
 	for k, v := range sd.Modified {

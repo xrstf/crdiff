@@ -1,0 +1,6 @@
+changed:
+  v1:
+    schemaChanges:
+      .spec.cluster:
+        added:
+          - newproperty

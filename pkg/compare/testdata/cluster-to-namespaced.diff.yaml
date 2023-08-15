@@ -1,0 +1,3 @@
+generalChanges:
+  - breaking: true
+    description: changed scope from "Cluster" to "Namespaced"

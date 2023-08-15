@@ -9,7 +9,10 @@ import (
 	"fmt"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/tufin/oasdiff/checker"
+	"github.com/tufin/oasdiff/checker/localizations"
 	"github.com/tufin/oasdiff/diff"
+	"github.com/tufin/oasdiff/load"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
@@ -18,31 +21,61 @@ func NewConfig() *diff.Config {
 	return diff.NewConfig()
 }
 
-func CompareSchemas(cfg *diff.Config, base, revision *apiextensionsv1.JSONSchemaProps) (*diff.SchemaDiff, error) {
+func CompareSchemas(cfg *diff.Config, base, revision *apiextensionsv1.JSONSchemaProps) (diffResult *diff.SchemaDiff, breakingChanges checker.Changes, err error) {
 	openapiBase, err := jsonschemaToOpenapiSchema(base)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert base CRD into openapi spec: %w", err)
+		return nil, nil, fmt.Errorf("failed to convert base CRD into openapi spec: %w", err)
 	}
+	baseSpecInfo := &load.SpecInfo{Url: "http://example.com", Spec: openapiBase}
 
 	openapiRevision, err := jsonschemaToOpenapiSchema(revision)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert revision CRD into openapi spec: %w", err)
+		return nil, nil, fmt.Errorf("failed to convert revision CRD into openapi spec: %w", err)
 	}
+	revisionSpecInfo := &load.SpecInfo{Url: "http://example.com", Spec: openapiRevision}
+
+	// step 1: diff both schemas against each other to determine all individual changes
 
 	if cfg == nil {
 		cfg = diff.NewConfig()
 	}
 
-	changes, err := diff.Get(cfg, openapiBase, openapiRevision)
+	changes, opSources, err := diff.GetWithOperationsSourcesMap(cfg, baseSpecInfo, revisionSpecInfo)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compare specs: %w", err)
+		return nil, nil, fmt.Errorf("failed to compare specs: %w", err)
 	}
 
 	if changes == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	return changes.PathsDiff.Modified[dummySchemaPath].OperationsDiff.Modified["POST"].RequestBodyDiff.ContentDiff.MediaTypeModified[dummyContentType].SchemaDiff, nil
+	completeDiff := changes.PathsDiff.Modified[dummySchemaPath].OperationsDiff.Modified["POST"].RequestBodyDiff.ContentDiff.MediaTypeModified[dummyContentType].SchemaDiff
+
+	// step 2: run the checker to determine backwards-incompatible (= breaking) changes
+	// this is adapted from oasdiff/internal/changelog.go
+
+	// oasdiff sets this to 5 by default
+	openapi3.CircularReferenceCounter = 5
+
+	includeChecks := []string{}
+	deprecationDaysBeta := 0   // we do not do deprecation periods based on days
+	deprecationDaysStable := 0 // same
+
+	bcConfig := checker.GetAllChecks(includeChecks, deprecationDaysBeta, deprecationDaysStable)
+	bcConfig.Localizer = *localizations.New("en", "en")
+
+	breakingChanges = checker.CheckBackwardCompatibilityUntilLevel(bcConfig, changes, opSources, checker.WARN)
+
+	// filter the breaking changes and remove misleading context
+	for k, change := range breakingChanges {
+		breakingChanges[k] = checker.ApiChange{
+			Id:    change.GetId(),
+			Text:  change.GetText(),
+			Level: change.GetLevel(),
+		}
+	}
+
+	return completeDiff, breakingChanges, nil
 }
 
 type openapi3Schema struct {

@@ -1,0 +1,15 @@
+changed:
+  v1:
+    schemaChanges:
+      .spec.cluster:
+        added:
+          - newproperty
+        changes:
+          required:
+            stringsdiff:
+              added:
+                - newproperty
+    breakingChanges:
+      - id: new-required-request-property
+        text: "added the new required request property \e[1m'spec/cluster/newproperty'\e[0m"
+        level: 3
