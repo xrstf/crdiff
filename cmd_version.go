@@ -33,7 +33,6 @@ func (o *versionCmdOptions) PreRunE(cmd *cobra.Command, args []string) error {
 		// NOP
 	case outputFormatJSON:
 		log.SetFormatter(&logrus.JSONFormatter{})
-		fmt.Println(time.RFC3339)
 	default:
 		log.Errorf("Invalid flags: Unknown output format %q.", o.output)
 		return fmt.Errorf("unknown output format %q", o.output)

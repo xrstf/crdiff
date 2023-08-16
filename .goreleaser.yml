@@ -26,10 +26,11 @@ builds:
         goarch: '386'
       - goos: freebsd
         goarch: '386'
+      - goos: windows
+        goarch: '386'
     binary: '{{ .ProjectName }}'
 archives:
   - format: tar.gz
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
 checksum:
-  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
-  algorithm: sha256
+  disable: true
