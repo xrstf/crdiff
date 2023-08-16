@@ -64,7 +64,8 @@ func BreakingRunE(globalOpts *globalOptions, cmdOpts *breakingCmdOptions) cobraF
 
 		log.Debug("Comparing CRDs…")
 		diffOpt := compare.CompareOptions{
-			BreakingOnly: true,
+			BreakingOnly:       true,
+			IgnoreDescriptions: cmdOpts.common.ignoreDescriptions,
 		}
 		report, err := compareCRDs(log, baseCRDs, revisionCRDs, diffOpt)
 		if err != nil {
@@ -78,7 +79,7 @@ func BreakingRunE(globalOpts *globalOptions, cmdOpts *breakingCmdOptions) cobraF
 			// return nil
 		}
 
-		outputReport(log, report, cmdOpts.common.output)
+		outputReport(log, report, &cmdOpts.common)
 
 		return nil
 	})

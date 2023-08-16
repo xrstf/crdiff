@@ -17,8 +17,9 @@ import (
 )
 
 type CompareOptions struct {
-	Versions     []string
-	BreakingOnly bool
+	Versions           []string
+	BreakingOnly       bool
+	IgnoreDescriptions bool
 }
 
 func CompareCRDs(base, revision crd.CRD, opt CompareOptions) (*CRDDiff, error) {
@@ -77,7 +78,7 @@ func CompareCRDs(base, revision crd.CRD, opt CompareOptions) (*CRDDiff, error) {
 			continue
 		}
 
-		result.ChangedVersions[version] = createCRDVersionDiff(completeDiff, breakingChanges)
+		result.ChangedVersions[version] = createCRDVersionDiff(completeDiff, breakingChanges, &opt)
 	}
 
 	// detect newly added versions in this CRD
@@ -99,18 +100,23 @@ func CompareCRDs(base, revision crd.CRD, opt CompareOptions) (*CRDDiff, error) {
 	return result, nil
 }
 
-func createCRDVersionDiff(diff *diff.SchemaDiff, breaking checker.Changes) CRDVersionDiff {
+func createCRDVersionDiff(diff *diff.SchemaDiff, breaking checker.Changes, opt *CompareOptions) CRDVersionDiff {
 	result := CRDVersionDiff{
 		SchemaChanges:   map[string]CRDSchemaDiff{},
 		BreakingChanges: breaking,
 	}
 
-	collectChangesFromSchemaDiff(result, diff, "")
+	collectChangesFromSchemaDiff(result, diff, opt, "")
 
 	return result
 }
 
-func hasLeafDiff(diff *diff.SchemaDiff) bool {
+func hasLeafDiff(diff *diff.SchemaDiff, opt *CompareOptions) bool {
+	// to keep things easy, we modify the struct if the user disabled certain checks
+	if opt.IgnoreDescriptions {
+		diff.DescriptionDiff = nil
+	}
+
 	return diff.ExtensionsDiff != nil ||
 		diff.OneOfDiff != nil ||
 		diff.AnyOfDiff != nil ||
@@ -159,8 +165,8 @@ func rootPath(path string) string {
 	return path
 }
 
-func collectChangesFromSchemaDiff(result CRDVersionDiff, sd *diff.SchemaDiff, path string) {
-	if hasLeafDiff(sd) {
+func collectChangesFromSchemaDiff(result CRDVersionDiff, sd *diff.SchemaDiff, opt *CompareOptions, path string) {
+	if hasLeafDiff(sd, opt) {
 		// strip Items- & Properties Diff, as those are treated differently
 		// and should not show up twice in the resulting diff
 		copied := oasdiff.DeepCopySchemaDiff(sd)
@@ -174,14 +180,14 @@ func collectChangesFromSchemaDiff(result CRDVersionDiff, sd *diff.SchemaDiff, pa
 
 	switch {
 	case sd.ItemsDiff != nil:
-		collectChangesFromSchemaDiff(result, sd.ItemsDiff, path+".[]")
+		collectChangesFromSchemaDiff(result, sd.ItemsDiff, opt, path+".[]")
 
 	case sd.PropertiesDiff != nil:
-		collectChangesFromSchemasDiff(result, sd.PropertiesDiff, path)
+		collectChangesFromSchemasDiff(result, sd.PropertiesDiff, opt, path)
 	}
 }
 
-func collectChangesFromSchemasDiff(result CRDVersionDiff, sd *diff.SchemasDiff, path string) {
+func collectChangesFromSchemasDiff(result CRDVersionDiff, sd *diff.SchemasDiff, opt *CompareOptions, path string) {
 	if len(sd.Added) > 0 || len(sd.Deleted) > 0 {
 		schemaDiff := result.SchemaChanges[rootPath(path)] // rely on Go's runtime defaulting for non-existing keys
 		schemaDiff.AddedProperties = sd.Added
@@ -191,7 +197,7 @@ func collectChangesFromSchemasDiff(result CRDVersionDiff, sd *diff.SchemasDiff, 
 	}
 
 	for k, v := range sd.Modified {
-		collectChangesFromSchemaDiff(result, v, path+"."+k)
+		collectChangesFromSchemaDiff(result, v, opt, path+"."+k)
 	}
 }
 

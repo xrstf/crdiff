@@ -46,13 +46,13 @@ func compareCRDs(log logrus.FieldLogger, baseCRDs, revisionCRDs map[string]crd.C
 	return report, nil
 }
 
-func outputReport(log logrus.FieldLogger, report *report.Report, format string) {
-	switch format {
+func outputReport(log logrus.FieldLogger, report *report.Report, opts *commonCompareOptions) {
+	switch opts.output {
 	case outputFormatText:
 		report.Print(true)
 	case outputFormatJSON:
 		json.NewEncoder(os.Stdout).Encode(report)
 	default:
-		log.Errorf("This should never happen: Do not know how to handle %s output format.", format)
+		log.Errorf("This should never happen: Do not know how to handle %s output format.", opts.output)
 	}
 }

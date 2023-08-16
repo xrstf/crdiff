@@ -67,7 +67,9 @@ func DiffRunE(globalOpts *globalOptions, cmdOpts *diffCmdOptions) cobraFuncE {
 		}
 
 		log.Debug("Comparing CRDs…")
-		diffOpt := compare.CompareOptions{}
+		diffOpt := compare.CompareOptions{
+			IgnoreDescriptions: cmdOpts.common.ignoreDescriptions,
+		}
 		report, err := compareCRDs(log, baseCRDs, revisionCRDs, diffOpt)
 		if err != nil {
 			return fmt.Errorf("failed comparing CRDs: %v", err)
@@ -80,7 +82,7 @@ func DiffRunE(globalOpts *globalOptions, cmdOpts *diffCmdOptions) cobraFuncE {
 			// return nil
 		}
 
-		outputReport(log, report, cmdOpts.common.output)
+		outputReport(log, report, &cmdOpts.common)
 
 		return nil
 	})

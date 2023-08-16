@@ -19,10 +19,10 @@ const (
 )
 
 type commonCompareOptions struct {
-	forceColor     bool
-	noColor        bool
-	output         string
-	noDescriptions bool
+	forceColor         bool
+	noColor            bool
+	output             string
+	ignoreDescriptions bool
 }
 
 func (o *commonCompareOptions) PreRunE(cmd *cobra.Command, args []string) error {
@@ -62,6 +62,6 @@ func (o *commonCompareOptions) PreRunE(cmd *cobra.Command, args []string) error 
 func (o *commonCompareOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.forceColor, "color", o.forceColor, "enable colored output (can also use $FORCE_COLOR)")
 	fs.BoolVar(&o.noColor, "no-color", o.noColor, "disable colored output (can also use $NO_COLOR)")
-	fs.BoolVar(&o.noDescriptions, "no-descriptions", o.noDescriptions, "hide changes to field descriptions")
+	fs.BoolVar(&o.ignoreDescriptions, "ignore-descriptions", o.ignoreDescriptions, "ignore changes to field descriptions")
 	fs.StringVarP(&o.output, "output", "o", o.output, "output format (one of [text, json])")
 }
