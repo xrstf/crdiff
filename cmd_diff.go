@@ -7,15 +7,30 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"go.xrstf.de/crdiff/pkg/compare"
 	"go.xrstf.de/crdiff/pkg/loader"
 )
 
-type diffCmdOptions struct{}
+type diffCmdOptions struct {
+	common commonCompareOptions
+}
+
+func (o *diffCmdOptions) PersistentPreRunE(cmd *cobra.Command, args []string) error {
+	return o.common.PreRunE(cmd, args)
+}
+
+func (o *diffCmdOptions) AddFlags(fs *pflag.FlagSet) {
+	o.common.AddFlags(fs)
+}
 
 func DiffCommand(globalOpts *globalOptions) *cobra.Command {
-	cmdOpts := diffCmdOptions{}
+	cmdOpts := diffCmdOptions{
+		common: commonCompareOptions{
+			output: outputFormatText,
+		},
+	}
 
 	cmd := &cobra.Command{
 		Use:          "diff BASE REVISION",
@@ -23,6 +38,10 @@ func DiffCommand(globalOpts *globalOptions) *cobra.Command {
 		RunE:         DiffRunE(globalOpts, &cmdOpts),
 		SilenceUsage: true,
 	}
+
+	cmdOpts.AddFlags(cmd.PersistentFlags())
+
+	cmd.PreRunE = cmdOpts.common.PreRunE
 
 	return cmd
 }
@@ -61,7 +80,7 @@ func DiffRunE(globalOpts *globalOptions, cmdOpts *diffCmdOptions) cobraFuncE {
 			// return nil
 		}
 
-		outputReport(log, report, globalOpts.output)
+		outputReport(log, report, cmdOpts.common.output)
 
 		return nil
 	})

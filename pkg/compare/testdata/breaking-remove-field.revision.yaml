@@ -1,0 +1,42 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: things.api.group
+spec:
+  group: api.group
+  names:
+    kind: Thing
+    listKind: ThingList
+    plural: things
+    singular: thing
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                cluster:
+                  properties:
+                    name:
+                      type: string
+                  required:
+                    - name
+                  type: object
+                isDefault:
+                  type: boolean
+                variables:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+              required:
+                - cluster
+                - name
+              type: object
+          type: object

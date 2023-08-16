@@ -7,15 +7,26 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"go.xrstf.de/crdiff/pkg/compare"
 	"go.xrstf.de/crdiff/pkg/loader"
 )
 
-type breakingCmdOptions struct{}
+type breakingCmdOptions struct {
+	common commonCompareOptions
+}
+
+func (o *breakingCmdOptions) AddFlags(fs *pflag.FlagSet) {
+	o.common.AddFlags(fs)
+}
 
 func BreakingCommand(globalOpts *globalOptions) *cobra.Command {
-	cmdOpts := breakingCmdOptions{}
+	cmdOpts := breakingCmdOptions{
+		common: commonCompareOptions{
+			output: outputFormatText,
+		},
+	}
 
 	cmd := &cobra.Command{
 		Use:          "breaking BASE REVISION",
@@ -23,6 +34,10 @@ func BreakingCommand(globalOpts *globalOptions) *cobra.Command {
 		RunE:         BreakingRunE(globalOpts, &cmdOpts),
 		SilenceUsage: true,
 	}
+
+	cmdOpts.AddFlags(cmd.PersistentFlags())
+
+	cmd.PreRunE = cmdOpts.common.PreRunE
 
 	return cmd
 }
@@ -63,7 +78,7 @@ func BreakingRunE(globalOpts *globalOptions, cmdOpts *breakingCmdOptions) cobraF
 			// return nil
 		}
 
-		outputReport(log, report, globalOpts.output)
+		outputReport(log, report, cmdOpts.common.output)
 
 		return nil
 	})

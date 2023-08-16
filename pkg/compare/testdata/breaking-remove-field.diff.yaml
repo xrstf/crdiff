@@ -1,0 +1,10 @@
+changed:
+  v1:
+    schemaChanges:
+      .spec:
+        deleted:
+          - name
+    breakingChanges:
+      - id: request-property-removed
+        text: "removed the request property \e[1m'spec/name'\e[0m"
+        level: 2

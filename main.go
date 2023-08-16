@@ -5,49 +5,26 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"runtime"
-	"strings"
 
-	"github.com/gookit/color"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-)
-
-// Project build specific vars
-var (
-	Tag    string
-	Commit string
-)
-
-func printVersion() {
-	fmt.Printf(
-		"version: %s\nbuilt with: %s\ntag: %s\ncommit: %s\n",
-		strings.TrimPrefix(Tag, "v"),
-		runtime.Version(),
-		Tag,
-		Commit,
-	)
-}
-
-const (
-	outputFormatText = "text"
-	outputFormatJSON = "json"
+	"github.com/spf13/pflag"
 )
 
 type globalOptions struct {
-	verbose    bool
-	forceColor bool
-	noColor    bool
-	output     string
+	verbose bool
+}
+
+func (o *globalOptions) AddFlags(fs *pflag.FlagSet) {
+	fs.BoolVarP(&o.verbose, "verbose", "v", o.verbose, "enable verbose logging")
 }
 
 type cobraFuncE func(cmd *cobra.Command, args []string) error
 
 var (
-	log logrus.FieldLogger
+	log *logrus.Logger
 )
 
 func main() {
@@ -74,53 +51,21 @@ func main() {
 		return err
 	})
 
-	rootCmd.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "enable verbose logging")
-	rootCmd.PersistentFlags().BoolVar(&opts.forceColor, "color", false, "enable colored output (can also use $FORCE_COLOR)")
-	rootCmd.PersistentFlags().BoolVar(&opts.noColor, "no-color", false, "disable colored output (can also use $NO_COLOR)")
-	rootCmd.PersistentFlags().StringVarP(&opts.output, "output", "o", "text", "output format (one of [text, json])")
+	opts.AddFlags(rootCmd.PersistentFlags())
 
-	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		// We silence errors so we can have full control over their handling,
-		// but this means nobody is processing the error returned from this
-		// function; so instead we print it ourselves and just return it to
-		// make cobra exit with 1.
-		fail := func(err error) error {
-			log.Errorf("Invalid flags: %v.", err)
-			return err
-		}
-
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		fmt.Println("rootCmd.PersistentPreRun")
 		// init logger as early as possible, as any error handling depends on it
-		logger := logrus.New()
+		log = logrus.New()
 		if opts.verbose {
-			logger.SetLevel(logrus.DebugLevel)
+			log.SetLevel(logrus.DebugLevel)
 		}
-		log = logger
-
-		switch opts.output {
-		case outputFormatText:
-			// NOP
-		case outputFormatJSON:
-			logger.SetFormatter(&logrus.JSONFormatter{})
-		default:
-			return fail(fmt.Errorf("unknown output format %q", opts.output))
-		}
-
-		if opts.forceColor && opts.noColor {
-			return fail(errors.New("cannot combine --no-color with --color"))
-		}
-
-		if opts.forceColor {
-			color.Enable = true
-		} else if opts.noColor {
-			color.Enable = false
-		}
-
-		return nil
 	}
 
 	rootCmd.AddCommand(
 		DiffCommand(&opts),
 		BreakingCommand(&opts),
+		VersionCommand(&opts),
 	)
 
 	// we don't need this
