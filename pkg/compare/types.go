@@ -147,7 +147,7 @@ func (in *CRDVersionDiff) DeepCopy() *CRDVersionDiff {
 // core/v1's Pod).
 type CRDSchemaDiff struct {
 	AddedProperties   utils.StringList `json:"added,omitempty" yaml:"added,omitempty"`
-	DeletedProperties utils.StringList `json:"changed,omitempty" yaml:"changed,omitempty"`
+	DeletedProperties utils.StringList `json:"deleted,omitempty" yaml:"deleted,omitempty"`
 	Diff              *diff.SchemaDiff `json:"changes,omitempty" yaml:"changes,omitempty"`
 }
 
