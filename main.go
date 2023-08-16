@@ -54,7 +54,6 @@ func main() {
 	opts.AddFlags(rootCmd.PersistentFlags())
 
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
-		fmt.Println("rootCmd.PersistentPreRun")
 		// init logger as early as possible, as any error handling depends on it
 		log = logrus.New()
 		if opts.verbose {
