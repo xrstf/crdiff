@@ -32,5 +32,10 @@ builds:
 archives:
   - format: tar.gz
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    wrap_in_directory: true
+    strip_parent_binary_folder: true
+    format_overrides:
+      - goos: windows
+        format: zip
 checksum:
   disable: true
