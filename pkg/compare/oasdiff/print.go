@@ -144,7 +144,8 @@ func PrintSchemaDiff(diff *diff.SchemaDiff) {
 		fmt.Printf("%sMaxPropsDiff: %#v\n", prefix, diff.MaxPropsDiff)
 	}
 	if diff.AdditionalPropertiesDiff != nil {
-		fmt.Printf("%sAdditionalPropertiesDiff: %#v\n", prefix, diff.AdditionalPropertiesDiff)
+		fmt.Printf("%sAdditionalPropertiesDiff:\n", prefix)
+		PrintSchemaDiff(diff.AdditionalPropertiesDiff)
 	}
 	if diff.DiscriminatorDiff != nil {
 		fmt.Printf("%sDiscriminatorDiff: %#v\n", prefix, diff.DiscriminatorDiff)

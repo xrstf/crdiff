@@ -153,7 +153,7 @@ func hasLeafDiff(diff *diff.SchemaDiff, opt *CompareOptions) bool {
 		// diff.PropertiesDiff is not considered a leaf
 		diff.MinPropsDiff != nil ||
 		diff.MaxPropsDiff != nil ||
-		diff.AdditionalPropertiesDiff != nil ||
+		// diff.AdditionalPropertiesDiff != nil ||
 		diff.DiscriminatorDiff != nil
 }
 
@@ -184,6 +184,9 @@ func collectChangesFromSchemaDiff(result CRDVersionDiff, sd *diff.SchemaDiff, op
 
 	case sd.PropertiesDiff != nil:
 		collectChangesFromSchemasDiff(result, sd.PropertiesDiff, opt, path)
+
+	case sd.AdditionalPropertiesDiff != nil:
+		collectChangesFromSchemaDiff(result, sd.AdditionalPropertiesDiff, opt, path+".*")
 	}
 }
 

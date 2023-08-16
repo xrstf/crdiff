@@ -240,9 +240,6 @@ func printSchemaDiff(diff *diff.SchemaDiff, padding string) {
 	if diff.MaxPropsDiff != nil {
 		fmt.Printf("%sMaxPropsDiff: %#v\n", padding, diff.MaxPropsDiff)
 	}
-	if diff.AdditionalPropertiesDiff != nil {
-		fmt.Printf("%sAdditionalPropertiesDiff: %#v\n", padding, diff.AdditionalPropertiesDiff)
-	}
 	if diff.DiscriminatorDiff != nil {
 		fmt.Printf("%sDiscriminatorDiff: %#v\n", padding, diff.DiscriminatorDiff)
 	}
