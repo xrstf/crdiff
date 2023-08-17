@@ -51,7 +51,9 @@ func outputReport(log logrus.FieldLogger, report *report.Report, opts *commonCom
 	case outputFormatText:
 		report.Print(true)
 	case outputFormatJSON:
-		json.NewEncoder(os.Stdout).Encode(report)
+		if err := json.NewEncoder(os.Stdout).Encode(report); err != nil {
+			log.Errorf("Failed to render output as JSON: %v", err)
+		}
 	default:
 		log.Errorf("This should never happen: Do not know how to handle %s output format.", opts.output)
 	}

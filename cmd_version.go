@@ -90,8 +90,7 @@ func VersionRunE(globalOpts *globalOptions, cmdOpts *versionCmdOptions) cobraFun
 		if err == nil {
 			builtOn = parsed.Format(time.RFC1123)
 
-			diff := time.Now().Sub(parsed)
-			if hours := diff.Hours(); hours > 24 {
+			if hours := time.Since(parsed).Hours(); hours > 24 {
 				builtOn += fmt.Sprintf(" (%d days ago)", int(hours/24))
 			}
 		}

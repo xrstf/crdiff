@@ -21,11 +21,15 @@ func DeepCopySchemaDiff(in *diff.SchemaDiff) *diff.SchemaDiff {
 	decoder := json.NewDecoder(reader)
 
 	go func() {
-		encoder.Encode(in)
+		if err := encoder.Encode(in); err != nil {
+			panic(err)
+		}
 	}()
 
 	out := &diff.SchemaDiff{}
-	decoder.Decode(out)
+	if err := decoder.Decode(out); err != nil {
+		panic(err)
+	}
 
 	return out
 }
