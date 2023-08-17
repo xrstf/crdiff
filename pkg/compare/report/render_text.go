@@ -11,88 +11,140 @@ import (
 
 	"go.xrstf.de/crdiff/pkg/colors"
 	"go.xrstf.de/crdiff/pkg/compare"
+	"go.xrstf.de/crdiff/pkg/indent"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func (r *Report) Print(breakingOnly bool) {
+func (r *Report) Render(breakingOnly bool) *indent.Indenter {
+	printer := indent.NewIndenter()
+
 	sortedIdentifiers := sets.List(sets.KeySet(r.Diffs))
 
-	for _, crdIdentifier := range sortedIdentifiers {
+	for i, crdIdentifier := range sortedIdentifiers {
 		crdChanges := r.Diffs[crdIdentifier]
 
-		if !shouldPrintCRD(crdChanges, breakingOnly) {
+		if !shouldPrintCRD(&crdChanges, breakingOnly) {
 			continue
 		}
 
-		heading(crdIdentifier, "=", 0, "crd")
-		fmt.Println("")
-
-		extraLine := false
-		if len(crdChanges.General) > 0 {
-			extraLine = true
-			for _, change := range crdChanges.General {
-				fmt.Printf("  ~ %s\n", change.Description)
-			}
+		if i > 0 {
+			printer.AddLine("")
 		}
 
-		if !breakingOnly {
-			for _, version := range crdChanges.AddedVersions {
-				extraLine = true
-				fmt.Printf("  + %s %s\n", colors.ActionAdd.Render("added"), colors.Version.Render(version))
-			}
-		}
-
-		for _, version := range crdChanges.DeletedVersions {
-			extraLine = true
-			fmt.Printf("  - %s %s\n", colors.ActionRemove.Render("removed"), colors.Version.Render(version))
-		}
-
-		if extraLine {
-			fmt.Println("")
-		}
-
-		changedVersions := sets.List(sets.KeySet(crdChanges.ChangedVersions))
-		for _, version := range changedVersions {
-			versionDiff := crdChanges.ChangedVersions[version]
-			if !shouldPrintCRDVersion(versionDiff, breakingOnly) {
-				continue
-			}
-
-			heading(version, "-", 2, "version")
-
-			changedPaths := sets.List(sets.KeySet(versionDiff.SchemaChanges))
-
-			for _, path := range changedPaths {
-				pathChanges := versionDiff.SchemaChanges[path]
-
-				fmt.Printf("    > %s:\n", colors.Path.Render(path))
-
-				for _, field := range pathChanges.AddedProperties {
-					fmt.Printf("      + %s %s\n", colors.ActionAdd.Render("added"), colors.Property.Render(field))
-				}
-
-				for _, field := range pathChanges.DeletedProperties {
-					fmt.Printf("      - %s %s\n", colors.ActionRemove.Render("removed"), colors.Property.Render(field))
-				}
-
-				if d := pathChanges.Diff; d != nil {
-					printSchemaDiff(d, "      ")
-				}
-
-				fmt.Println("")
-			}
-
-			fmt.Println("")
-
-			for _, b := range versionDiff.BreakingChanges {
-				fmt.Println(b)
-			}
-		}
+		crdRendered := renderCRDDiffAsText(crdIdentifier, &crdChanges, breakingOnly)
+		printer.Add(crdRendered)
 	}
+
+	return printer
 }
 
-func shouldPrintCRD(d compare.CRDDiff, breakingOnly bool) bool {
+func (r *Report) Print(breakingOnly bool) {
+	fmt.Println(r.Render(breakingOnly))
+}
+
+func renderCRDDiffAsText(crdIdentifier string, crdChanges *compare.CRDDiff, breakingOnly bool) *indent.Indenter {
+	printer := indent.NewIndenter()
+	printer.AddLine(heading(crdIdentifier, "=", "crd"))
+	printer.Indent()
+
+	unversionedChanges := indent.NewIndenter()
+
+	for _, change := range crdChanges.General {
+		unversionedChanges.AddLinef("~ %s", change.Description)
+	}
+
+	if !breakingOnly {
+		for _, version := range crdChanges.AddedVersions {
+			unversionedChanges.AddLinef("+ %s %s", colors.ActionAdd.Render("added"), colors.Version.Render(version))
+		}
+	}
+
+	for _, version := range crdChanges.DeletedVersions {
+		unversionedChanges.AddLinef("- %s %s", colors.ActionRemove.Render("removed"), colors.Version.Render(version))
+	}
+
+	if !unversionedChanges.Empty() {
+		printer.AddLine("")
+		printer.Add(unversionedChanges)
+	}
+
+	// ensure a stable, sorted order of versions
+	changedVersions := sets.List(sets.KeySet(crdChanges.ChangedVersions))
+	for _, version := range changedVersions {
+		versionDiff := crdChanges.ChangedVersions[version]
+		if !shouldPrintCRDVersion(versionDiff, breakingOnly) {
+			continue
+		}
+
+		renderedVersionDiff := renderCRDVersionDiffAsText(version, &versionDiff, breakingOnly)
+		if renderedVersionDiff != nil {
+			printer.AddLine("")
+			printer.Add(renderedVersionDiff)
+		}
+	}
+
+	return printer
+}
+
+func renderCRDVersionDiffAsText(version string, versionDiff *compare.CRDVersionDiff, breakingOnly bool) *indent.Indenter {
+	blocks := []*indent.Indenter{}
+
+	// ensure a stable, sorted order of paths
+	changedPaths := sets.List(sets.KeySet(versionDiff.SchemaChanges))
+	for _, path := range changedPaths {
+		pathChanges := versionDiff.SchemaChanges[path]
+
+		changes := indent.NewIndenter()
+
+		for _, field := range pathChanges.AddedProperties {
+			changes.AddLinef("+ %s %s", colors.ActionAdd.Render("added"), colors.Property.Render(field))
+		}
+
+		for _, field := range pathChanges.DeletedProperties {
+			changes.AddLinef("- %s %s", colors.ActionRemove.Render("removed"), colors.Property.Render(field))
+		}
+
+		if d := pathChanges.Diff; d != nil {
+			printSchemaDiff(d, changes)
+		}
+
+		if !changes.Empty() {
+			block := indent.NewIndenter()
+			block.AddLinef("%s:", colors.Path.Render(path))
+			block.Indent()
+			block.Add(changes)
+
+			blocks = append(blocks, block)
+		}
+	}
+
+	breaking := indent.NewIndenter()
+	for _, b := range versionDiff.BreakingChanges {
+		breaking.AddLine(b.GetText())
+	}
+
+	if !breaking.Empty() {
+		blocks = append(blocks, breaking)
+	}
+
+	if len(blocks) == 0 {
+		return nil
+	}
+
+	result := indent.NewIndenter()
+	result.AddLine(heading(version, "-", "version"))
+	result.Indent()
+
+	for i := range blocks {
+		result.AddLine("")
+		result.Add(blocks[i])
+	}
+
+	return result
+}
+
+func shouldPrintCRD(d *compare.CRDDiff, breakingOnly bool) bool {
 	if breakingOnly {
 		return d.HasBreakingChanges()
 	}
@@ -108,8 +160,7 @@ func shouldPrintCRDVersion(d compare.CRDVersionDiff, breakingOnly bool) bool {
 	return d.HasChanges()
 }
 
-func heading(s, u string, padding int, style string) {
-	pad := strings.Repeat(" ", padding)
+func heading(s, u string, style string) string {
 	line := strings.Repeat(u, len(s))
 
 	if style != "" {
@@ -117,131 +168,120 @@ func heading(s, u string, padding int, style string) {
 		line = colors.Styles[style].Render(line)
 	}
 
-	fmt.Println(pad + s)
-	fmt.Println(pad + line)
+	return fmt.Sprintf("%s\n%s", s, line)
 }
 
-func printSchemaDiff(diff *diff.SchemaDiff, padding string) {
+func printSchemaDiff(diff *diff.SchemaDiff, printer *indent.Indenter) {
 	if diff.ExtensionsDiff != nil {
-		fmt.Printf("%sExtensionsDiff: %#v\n", padding, diff.ExtensionsDiff)
+		printer.AddLinef("ExtensionsDiff: %#v", diff.ExtensionsDiff)
 	}
 	if diff.OneOfDiff != nil {
-		fmt.Printf("%sOneOfDiff: %#v\n", padding, diff.OneOfDiff)
+		printer.AddLinef("OneOfDiff: %#v", diff.OneOfDiff)
 	}
 	if diff.AnyOfDiff != nil {
-		fmt.Printf("%sAnyOfDiff: %#v\n", padding, diff.AnyOfDiff)
+		printer.AddLinef("AnyOfDiff: %#v", diff.AnyOfDiff)
 	}
 	if diff.AllOfDiff != nil {
-		fmt.Printf("%sAllOfDiff: %#v\n", padding, diff.AllOfDiff)
+		printer.AddLinef("AllOfDiff: %#v", diff.AllOfDiff)
 	}
 	if diff.NotDiff != nil {
-		fmt.Printf("%sNotDiff: %#v\n", padding, diff.NotDiff)
+		printer.AddLinef("NotDiff: %#v", diff.NotDiff)
 	}
 	if d := diff.TypeDiff; d != nil {
-		printValueDiff("type", d, padding)
+		printValueDiff("type", d, printer)
 	}
 	if d := diff.TitleDiff; d != nil {
-		printValueDiff("title", d, padding)
+		printValueDiff("title", d, printer)
 	}
 	if d := diff.FormatDiff; d != nil {
-		printValueDiff("format", d, padding)
+		printValueDiff("format", d, printer)
 	}
 	if d := diff.DescriptionDiff; d != nil {
-		printValueDiff("description", d, padding)
+		printValueDiff("description", d, printer)
 	}
 	if diff.EnumDiff != nil {
-		fmt.Printf("%sEnumDiff: %#v\n", padding, diff.EnumDiff)
+		printer.AddLinef("EnumDiff: %#v", diff.EnumDiff)
 	}
 	if d := diff.DefaultDiff; d != nil {
-		printValueDiff("default value", d, padding)
+		printValueDiff("default value", d, printer)
 	}
 	if d := diff.ExampleDiff; d != nil {
-		printValueDiff("example", d, padding)
+		printValueDiff("example", d, printer)
 	}
 	if diff.ExternalDocsDiff != nil {
-		fmt.Printf("%sExternalDocsDiff: %#v\n", padding, diff.ExternalDocsDiff)
+		printer.AddLinef("ExternalDocsDiff: %#v", diff.ExternalDocsDiff)
 	}
 	if diff.AdditionalPropertiesAllowedDiff != nil {
-		fmt.Printf("%sAdditionalPropertiesAllowedDiff: %#v\n", padding, diff.AdditionalPropertiesAllowedDiff)
+		printer.AddLinef("AdditionalPropertiesAllowedDiff: %#v", diff.AdditionalPropertiesAllowedDiff)
 	}
 	if diff.UniqueItemsDiff != nil {
-		fmt.Printf("%sUniqueItemsDiff: %#v\n", padding, diff.UniqueItemsDiff)
+		printer.AddLinef("UniqueItemsDiff: %#v", diff.UniqueItemsDiff)
 	}
 	if diff.ExclusiveMinDiff != nil {
-		fmt.Printf("%sExclusiveMinDiff: %#v\n", padding, diff.ExclusiveMinDiff)
+		printer.AddLinef("ExclusiveMinDiff: %#v", diff.ExclusiveMinDiff)
 	}
 	if diff.ExclusiveMaxDiff != nil {
-		fmt.Printf("%sExclusiveMaxDiff: %#v\n", padding, diff.ExclusiveMaxDiff)
+		printer.AddLinef("ExclusiveMaxDiff: %#v", diff.ExclusiveMaxDiff)
 	}
 	if d := diff.NullableDiff; d != nil {
-		printValueDiff("nullable", d, padding)
+		printValueDiff("nullable", d, printer)
 	}
 	if diff.ReadOnlyDiff != nil {
-		fmt.Printf("%sReadOnlyDiff: %#v\n", padding, diff.ReadOnlyDiff)
+		printer.AddLinef("ReadOnlyDiff: %#v", diff.ReadOnlyDiff)
 	}
 	if diff.WriteOnlyDiff != nil {
-		fmt.Printf("%sWriteOnlyDiff: %#v\n", padding, diff.WriteOnlyDiff)
+		printer.AddLinef("WriteOnlyDiff: %#v", diff.WriteOnlyDiff)
 	}
 	if diff.AllowEmptyValueDiff != nil {
-		fmt.Printf("%sAllowEmptyValueDiff: %#v\n", padding, diff.AllowEmptyValueDiff)
+		printer.AddLinef("AllowEmptyValueDiff: %#v", diff.AllowEmptyValueDiff)
 	}
 	if diff.XMLDiff != nil {
-		fmt.Printf("%sXMLDiff: %#v\n", padding, diff.XMLDiff)
+		printer.AddLinef("XMLDiff: %#v", diff.XMLDiff)
 	}
 	if diff.DeprecatedDiff != nil {
-		fmt.Printf("%sDeprecatedDiff: %#v\n", padding, diff.DeprecatedDiff)
+		printer.AddLinef("DeprecatedDiff: %#v", diff.DeprecatedDiff)
 	}
 	if d := diff.MinDiff; d != nil {
-		printValueDiff("minimum allowed value", d, padding)
+		printValueDiff("minimum allowed value", d, printer)
 	}
 	if d := diff.MaxDiff; d != nil {
-		printValueDiff("maximum allowed value", d, padding)
+		printValueDiff("maximum allowed value", d, printer)
 	}
 	if diff.MultipleOfDiff != nil {
-		fmt.Printf("%sMultipleOfDiff: %#v\n", padding, diff.MultipleOfDiff)
+		printer.AddLinef("MultipleOfDiff: %#v", diff.MultipleOfDiff)
 	}
 	if d := diff.MinLengthDiff; d != nil {
-		printValueDiff("minimum required length", d, padding)
+		printValueDiff("minimum required length", d, printer)
 	}
 	if d := diff.MaxLengthDiff; d != nil {
-		printValueDiff("maximum allowed length", d, padding)
+		printValueDiff("maximum allowed length", d, printer)
 	}
 	if d := diff.PatternDiff; d != nil {
-		printValueDiff("pattern", d, padding)
+		printValueDiff("pattern", d, printer)
 	}
 	if d := diff.MinItemsDiff; d != nil {
-		printValueDiff("minimum required items", d, padding)
+		printValueDiff("minimum required items", d, printer)
 	}
 	if d := diff.MaxItemsDiff; d != nil {
-		printValueDiff("maximum allowed items", d, padding)
+		printValueDiff("maximum allowed items", d, printer)
 	}
 	if d := diff.RequiredDiff; d != nil {
 		if items := d.Added; len(items) > 0 {
-			fmt.Printf(
-				"%s~ %s %v\n",
-				padding,
-				colors.ActionChange.Render("requires"),
-				colors.Property.Render(items),
-			)
+			printer.AddLinef("~ %s %v", colors.ActionChange.Render("requires"), colors.Property.Render(items))
 		}
 
 		if items := d.Deleted; len(items) > 0 {
-			fmt.Printf(
-				"%s~ %s %v\n",
-				padding,
-				colors.ActionChange.Render("unrequires"),
-				colors.Property.Render(items),
-			)
+			printer.AddLinef("~ %s %v", colors.ActionChange.Render("unrequires"), colors.Property.Render(items))
 		}
 	}
 	if diff.MinPropsDiff != nil {
-		fmt.Printf("%sMinPropsDiff: %#v\n", padding, diff.MinPropsDiff)
+		printer.AddLinef("MinPropsDiff: %#v", diff.MinPropsDiff)
 	}
 	if diff.MaxPropsDiff != nil {
-		fmt.Printf("%sMaxPropsDiff: %#v\n", padding, diff.MaxPropsDiff)
+		printer.AddLinef("MaxPropsDiff: %#v", diff.MaxPropsDiff)
 	}
 	if diff.DiscriminatorDiff != nil {
-		fmt.Printf("%sDiscriminatorDiff: %#v\n", padding, diff.DiscriminatorDiff)
+		printer.AddLinef("DiscriminatorDiff: %#v", diff.DiscriminatorDiff)
 	}
 }
 
@@ -249,13 +289,12 @@ func isEmpty(s string) bool {
 	return s == "" || s == "<nil>"
 }
 
-func printValueDiff(attribute string, diff *diff.ValueDiff, padding string) {
+func printValueDiff(attribute string, diff *diff.ValueDiff, printer *indent.Indenter) {
 	from := fmt.Sprintf("%v", diff.From)
 
 	if isEmpty(from) {
-		fmt.Printf(
-			"%s~ %s %s to %s\n",
-			padding,
+		printer.AddLinef(
+			"~ %s %s to %s",
 			colors.ActionChange.Render("set"),
 			colors.Attribute.Render(attribute),
 			colors.NewValue.Render(diff.To),
@@ -264,16 +303,14 @@ func printValueDiff(attribute string, diff *diff.ValueDiff, padding string) {
 		to := fmt.Sprintf("%v", diff.To)
 
 		if isEmpty(to) {
-			fmt.Printf(
-				"%s~ %s %s\n",
-				padding,
+			printer.AddLinef(
+				"~ %s %s",
 				colors.ActionChange.Render("removed"),
 				colors.Attribute.Render(attribute),
 			)
 		} else {
-			fmt.Printf(
-				"%s~ %s %s from %s to %s\n",
-				padding,
+			printer.AddLinef(
+				"~ %s %s from %s to %s",
 				colors.ActionChange.Render("changed"),
 				colors.Attribute.Render(attribute),
 				colors.OldValue.Render(diff.From),
