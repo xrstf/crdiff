@@ -121,7 +121,7 @@ func renderCRDVersionDiffAsText(version string, versionDiff *compare.CRDVersionD
 
 	breaking := indent.NewIndenter()
 	for _, b := range versionDiff.BreakingChanges {
-		breaking.AddLine(b.GetText())
+		breaking.AddLine(fmt.Sprintf("%v", b))
 	}
 
 	if !breaking.Empty() {

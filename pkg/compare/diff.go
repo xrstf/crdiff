@@ -4,6 +4,7 @@
 package compare
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/tufin/oasdiff/checker"
@@ -103,7 +104,25 @@ func CompareCRDs(base, revision crd.CRD, opt CompareOptions) (*CRDDiff, error) {
 func createCRDVersionDiff(diff *diff.SchemaDiff, breaking checker.Changes, opt *CompareOptions) CRDVersionDiff {
 	result := CRDVersionDiff{
 		SchemaChanges:   map[string]CRDSchemaDiff{},
-		BreakingChanges: breaking,
+		BreakingChanges: make([]BreakingChange, len(breaking)),
+	}
+
+	for i, change := range breaking {
+		msg := oasdiff.LocalizedMessage{}
+
+		// unwrap the localizer data we sneakily injected by using a JSON localizer
+		if text := change.GetText(); text != "" {
+			if err := json.Unmarshal([]byte(text), &msg); err != nil {
+				panic(err)
+			}
+		}
+
+		result.BreakingChanges[i] = BreakingChange{
+			ID:        change.GetId(),
+			Level:     change.GetLevel(),
+			InfoKey:   msg.Key,
+			Arguments: msg.Args,
+		}
 	}
 
 	collectChangesFromSchemaDiff(result, diff, opt, "")

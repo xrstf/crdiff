@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/TwiN/go-color"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/tufin/oasdiff/checker"
-	"github.com/tufin/oasdiff/checker/localizations"
 	"github.com/tufin/oasdiff/diff"
 	"github.com/tufin/oasdiff/load"
 
@@ -62,7 +62,16 @@ func CompareSchemas(cfg *diff.Config, base, revision *apiextensionsv1.JSONSchema
 	deprecationDaysStable := 0 // same
 
 	bcConfig := checker.GetAllChecks(includeChecks, deprecationDaysBeta, deprecationDaysStable)
-	bcConfig.Localizer = *localizations.New("en", "en")
+
+	// oasdiff reports no raw data for breaking changes, but a textual
+	// representation, which includes colored highlights as well; to
+	// gain access to some of the raw data, we cheat by injecting a
+	// localizer that transforms the data into JSON and then later we
+	// unwrap that JSON again.
+	bcConfig.Localize = jsonLocalizer
+
+	// to make parsing localizer args easier, we disable any colors
+	color.Toggle(false)
 
 	breakingChanges = checker.CheckBackwardCompatibilityUntilLevel(bcConfig, changes, opSources, checker.WARN)
 

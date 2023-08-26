@@ -104,7 +104,7 @@ func (in *CRDDiff) DeepCopy() *CRDDiff {
 // +k8s:deepcopy-gen=true
 type CRDVersionDiff struct {
 	SchemaChanges   map[string]CRDSchemaDiff `json:"schemaChanges,omitempty" yaml:"schemaChanges,omitempty"`
-	BreakingChanges []checker.Change         `json:"breakingChanges,omitempty" yaml:"breakingChanges,omitempty"`
+	BreakingChanges []BreakingChange         `json:"breakingChanges,omitempty" yaml:"breakingChanges,omitempty"`
 }
 
 func (d *CRDVersionDiff) HasChanges() bool {
@@ -130,7 +130,7 @@ func (in *CRDVersionDiff) DeepCopy() *CRDVersionDiff {
 
 	out := &CRDVersionDiff{
 		SchemaChanges:   make(map[string]CRDSchemaDiff, len(in.SchemaChanges)),
-		BreakingChanges: make([]checker.Change, len(in.BreakingChanges)),
+		BreakingChanges: make([]BreakingChange, len(in.BreakingChanges)),
 	}
 
 	copy(out.BreakingChanges, in.BreakingChanges)
@@ -166,4 +166,14 @@ func (in *CRDSchemaDiff) DeepCopy() *CRDSchemaDiff {
 	copy(out.DeletedProperties, in.DeletedProperties)
 
 	return out
+}
+
+// BreakingChange is, compared to a relatively unspecific Change,
+// based on breaking changes reported by oasdiff and tied to
+// schema changes.
+type BreakingChange struct {
+	ID        string        `json:"id" yaml:"id"`
+	Level     checker.Level `json:"level" yaml:"level"`
+	InfoKey   string        `json:"info" yaml:"info"`
+	Arguments []interface{} `json:"args,omitempty" yaml:"args,omitempty"`
 }

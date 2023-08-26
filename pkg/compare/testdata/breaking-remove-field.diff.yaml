@@ -6,5 +6,5 @@ changed:
           - name
     breakingChanges:
       - id: request-property-removed
-        text: "removed the request property \e[1m'spec/name'\e[0m"
+        text: '{"key":"request-property-removed","args":["spec/name"]}'
         level: 2
