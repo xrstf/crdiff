@@ -172,8 +172,7 @@ func (in *CRDSchemaDiff) DeepCopy() *CRDSchemaDiff {
 // based on breaking changes reported by oasdiff and tied to
 // schema changes.
 type BreakingChange struct {
-	ID        string        `json:"id" yaml:"id"`
-	Level     checker.Level `json:"level" yaml:"level"`
-	InfoKey   string        `json:"info" yaml:"info"`
-	Arguments []interface{} `json:"args,omitempty" yaml:"args,omitempty"`
+	ID      string        `json:"id" yaml:"id"`
+	Level   checker.Level `json:"level" yaml:"level"`
+	Details interface{}   `json:"details" yaml:"details"`
 }

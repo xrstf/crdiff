@@ -118,10 +118,9 @@ func createCRDVersionDiff(diff *diff.SchemaDiff, breaking checker.Changes, opt *
 		}
 
 		result.BreakingChanges[i] = BreakingChange{
-			ID:        change.GetId(),
-			Level:     change.GetLevel(),
-			InfoKey:   msg.Key,
-			Arguments: msg.Args,
+			ID:      change.GetId(),
+			Level:   change.GetLevel(),
+			Details: msg.Disect(),
 		}
 	}
 
