@@ -11,6 +11,7 @@ import (
 
 	"go.xrstf.de/crdiff/pkg/colors"
 	"go.xrstf.de/crdiff/pkg/compare"
+	"go.xrstf.de/crdiff/pkg/compare/oasdiff"
 	"go.xrstf.de/crdiff/pkg/indent"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -90,42 +91,51 @@ func renderCRDDiffAsText(crdIdentifier string, crdChanges *compare.CRDDiff, brea
 func renderCRDVersionDiffAsText(version string, versionDiff *compare.CRDVersionDiff, breakingOnly bool) *indent.Indenter {
 	blocks := []*indent.Indenter{}
 
-	// ensure a stable, sorted order of paths
-	changedPaths := sets.List(sets.KeySet(versionDiff.SchemaChanges))
-	for _, path := range changedPaths {
-		pathChanges := versionDiff.SchemaChanges[path]
+	if !breakingOnly {
+		// ensure a stable, sorted order of paths
+		changedPaths := sets.List(sets.KeySet(versionDiff.SchemaChanges))
+		for _, path := range changedPaths {
+			pathChanges := versionDiff.SchemaChanges[path]
 
-		changes := indent.NewIndenter()
+			changes := indent.NewIndenter()
 
-		for _, field := range pathChanges.AddedProperties {
-			changes.AddLinef("+ %s %s", colors.ActionAdd.Render("added"), colors.Property.Render(field))
-		}
+			for _, field := range pathChanges.AddedProperties {
+				changes.AddLinef("+ %s %s", colors.ActionAdd.Render("added"), colors.Property.Render(field))
+			}
 
-		for _, field := range pathChanges.DeletedProperties {
-			changes.AddLinef("- %s %s", colors.ActionRemove.Render("removed"), colors.Property.Render(field))
-		}
+			for _, field := range pathChanges.DeletedProperties {
+				changes.AddLinef("- %s %s", colors.ActionRemove.Render("removed"), colors.Property.Render(field))
+			}
 
-		if d := pathChanges.Diff; d != nil {
-			printSchemaDiff(d, changes)
-		}
+			if d := pathChanges.Diff; d != nil {
+				printSchemaDiff(d, changes)
+			}
 
-		if !changes.Empty() {
-			block := indent.NewIndenter()
-			block.AddLinef("%s:", colors.Path.Render(path))
-			block.Indent()
-			block.Add(changes)
+			if !changes.Empty() {
+				block := indent.NewIndenter()
+				block.AddLinef("%s:", colors.Path.Render(path))
+				block.Indent()
+				block.Add(changes)
 
-			blocks = append(blocks, block)
+				blocks = append(blocks, block)
+			}
 		}
 	}
 
-	breaking := indent.NewIndenter()
-	for _, b := range versionDiff.BreakingChanges {
-		breaking.AddLine(fmt.Sprintf("%v", b))
-	}
+	if len(versionDiff.BreakingChanges) > 0 {
+		breaking := indent.NewIndenter()
+		if !breakingOnly {
+			breaking.AddLine(heading("Breaking Changes", "-", "breaking-changes-heading"))
+			breaking.AddLine("")
+		}
 
-	if !breaking.Empty() {
-		blocks = append(blocks, breaking)
+		for _, b := range versionDiff.BreakingChanges {
+			breaking.AddLine(renderBreakingChange(b))
+		}
+
+		if !breaking.Empty() {
+			blocks = append(blocks, breaking)
+		}
 	}
 
 	if len(blocks) == 0 {
@@ -318,4 +328,37 @@ func printValueDiff(attribute string, diff *diff.ValueDiff, printer *indent.Inde
 			)
 		}
 	}
+}
+
+func renderBreakingChange(b compare.BreakingChange) string {
+	p := colors.Path.Render
+
+	switch msg := b.Details.(type) {
+	case *oasdiff.NewRequiredPropertyMessage:
+		return fmt.Sprintf("+ %s new required property %s.", colors.ActionAdd.Render("Added"), p(msg.Path))
+	case *oasdiff.PropertyBecameRequiredMessage:
+		return fmt.Sprintf("~ %s became a required property.", p(msg.Path))
+	case *oasdiff.PropertyBecameEnumMessage:
+		return fmt.Sprintf("~ %s became an ENUM.", p(msg.Path))
+	case *oasdiff.PropertyRemovedMessage:
+		return fmt.Sprintf("- Property %s was %s.", p(msg.Path), colors.ActionRemove.Render("removed"))
+	case *oasdiff.PropertyTypeChangedMessage:
+		return fmt.Sprintf("~ Type of %s was %s from %s to %s.", p(msg.Path), colors.ActionChange.Render("changed"), colors.OldValue.Render(msg.From), colors.NewValue.Render(msg.To))
+	case *oasdiff.PropertyMaxLengthSetMessage:
+		return fmt.Sprintf("~ %s of %s was %s to %s.", colors.Attribute.Render("Maximum length"), p(msg.Path), colors.ActionAdd.Render("set"), colors.NewValue.Render(msg.Length))
+	case *oasdiff.PropertyMinLengthSetMessage:
+		return fmt.Sprintf("~ %s of %s was %s to %s.", colors.Attribute.Render("Minimum length"), p(msg.Path), colors.ActionAdd.Render("set"), colors.NewValue.Render(msg.Length))
+	case *oasdiff.PropertyMinLengthIncreasedMessage:
+		return fmt.Sprintf("~ %s of %s was %s from %s to %s.", colors.Attribute.Render("Minimum length"), p(msg.Path), colors.ActionChange.Render("increased"), colors.OldValue.Render(msg.From), colors.NewValue.Render(msg.To))
+	case *oasdiff.PropertyMinItemsSetMessage:
+		return fmt.Sprintf("~ %s of %s was %s to %s.", colors.Attribute.Render("Minimum number of items"), p(msg.Path), colors.ActionAdd.Render("set"), colors.NewValue.Render(msg.Items))
+	case *oasdiff.PropertyMinItemsIncreasedMessage:
+		return fmt.Sprintf("~ %s in %s was %s from %s to %s.", colors.Attribute.Render("Minimum number of items"), p(msg.Path), colors.ActionChange.Render("increased"), colors.OldValue.Render(msg.From), colors.NewValue.Render(msg.To))
+	case *oasdiff.PropertyPatternAddedMessage:
+		return fmt.Sprintf("~ A %s for %s was %s to %s.", colors.Attribute.Render("pattern"), p(msg.Path), colors.ActionAdd.Render("set"), colors.NewValue.Render(msg.Pattern))
+	case *oasdiff.PropertyPatternChangedMessage:
+		return fmt.Sprintf("~ The %s for %s was %s from %s to %s.", colors.Attribute.Render("pattern"), p(msg.Path), colors.ActionChange.Render("changed"), colors.OldValue.Render(msg.From), colors.NewValue.Render(msg.To))
+	}
+
+	return fmt.Sprintf("%+v", b)
 }

@@ -48,55 +48,64 @@ func (m *LocalizedMessage) Disect() interface{} {
 	// ignored here.
 	switch m.Key {
 	case "new-required-request-property":
-		return &NewRequiredPropertyMessage{Path: m.Args[0].(string)}
+		return &NewRequiredPropertyMessage{
+			Path: toPath(m.Args[0]),
+		}
 	case "request-property-became-required":
-		return &PropertyBecameRequiredMessage{Path: m.Args[0].(string)}
+		return &PropertyBecameRequiredMessage{
+			Path: toPath(m.Args[0]),
+		}
 	case "request-property-became-enum":
-		return &PropertyBecameEnumMessage{Path: m.Args[0].(string)}
+		return &PropertyBecameEnumMessage{
+			Path: toPath(m.Args[0]),
+		}
 	case "request-property-removed":
-		return &PropertyRemovedMessage{Path: m.Args[0].(string)}
+		return &PropertyRemovedMessage{
+			Path: toPath(m.Args[0]),
+		}
 	case "request-property-type-changed":
 		return &PropertyTypeChangedMessage{
-			Path: m.Args[0].(string),
+			Path: toPath(m.Args[0]),
 			From: m.Args[1].(string),
 			To:   m.Args[3].(string),
 		}
 	case "request-property-max-length-set":
 		return &PropertyMaxLengthSetMessage{
-			Path:   m.Args[0].(string),
+			Path:   toPath(m.Args[0]),
 			Length: parseInt(m.Args[1]),
 		}
 	case "request-property-min-length-set":
 		return &PropertyMinLengthSetMessage{
-			Path:   m.Args[0].(string),
+			Path:   toPath(m.Args[0]),
 			Length: parseInt(m.Args[1]),
 		}
 	case "request-property-min-length-increased":
 		return &PropertyMinLengthIncreasedMessage{
-			Path: m.Args[0].(string),
+			Path: toPath(m.Args[0]),
 			From: parseInt(m.Args[1]),
 			To:   parseInt(m.Args[2]),
 		}
 	case "request-property-min-items-set":
 		return &PropertyMinItemsSetMessage{
-			Path:  m.Args[0].(string),
+			Path:  toPath(m.Args[0]),
 			Items: parseInt(m.Args[1]),
 		}
 	case "request-property-min-items-increased":
 		return &PropertyMinItemsIncreasedMessage{
-			Path: m.Args[0].(string),
+			Path: toPath(m.Args[0]),
 			From: parseInt(m.Args[1]),
 			To:   parseInt(m.Args[2]),
 		}
 	case "request-property-pattern-added":
 		return &PropertyPatternAddedMessage{
 			Pattern: m.Args[0].(string),
-			Path:    m.Args[1].(string),
+			Path:    toPath(m.Args[1]),
 		}
 	case "request-property-pattern-changed":
 		return &PropertyPatternChangedMessage{
-			Pattern: m.Args[0].(string),
-			Path:    m.Args[1].(string),
+			Path: toPath(m.Args[0]),
+			From: m.Args[1].(string),
+			To:   m.Args[2].(string),
 		}
 	default:
 		return m
@@ -118,6 +127,13 @@ func parseInt(v interface{}) int {
 	}
 
 	panic(fmt.Sprintf("cannot parse %v (%T) as int", v, v))
+}
+
+func toPath(p interface{}) string {
+	s := p.(string)
+	s = strings.ReplaceAll(s, "/", ".")
+
+	return "." + s
 }
 
 type NewRequiredPropertyMessage struct {
@@ -175,6 +191,7 @@ type PropertyPatternAddedMessage struct {
 }
 
 type PropertyPatternChangedMessage struct {
-	Path    string `json:"path" yaml:"path"`
-	Pattern string `json:"pattern" yaml:"pattern"`
+	Path string `json:"path" yaml:"path"`
+	From string `json:"from" yaml:"from"`
+	To   string `json:"to" yaml:"to"`
 }

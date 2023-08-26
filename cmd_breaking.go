@@ -79,7 +79,7 @@ func BreakingRunE(globalOpts *globalOptions, cmdOpts *breakingCmdOptions) cobraF
 			// return nil
 		}
 
-		outputReport(log, report, &cmdOpts.common)
+		outputReport(log, report, true, &cmdOpts.common)
 
 		return nil
 	})

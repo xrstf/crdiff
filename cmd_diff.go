@@ -82,7 +82,7 @@ func DiffRunE(globalOpts *globalOptions, cmdOpts *diffCmdOptions) cobraFuncE {
 			// return nil
 		}
 
-		outputReport(log, report, &cmdOpts.common)
+		outputReport(log, report, false, &cmdOpts.common)
 
 		return nil
 	})

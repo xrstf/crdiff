@@ -46,10 +46,10 @@ func compareCRDs(log logrus.FieldLogger, baseCRDs, revisionCRDs map[string]crd.C
 	return report, nil
 }
 
-func outputReport(log logrus.FieldLogger, report *report.Report, opts *commonCompareOptions) {
+func outputReport(log logrus.FieldLogger, report *report.Report, breakingOnly bool, opts *commonCompareOptions) {
 	switch opts.output {
 	case outputFormatText:
-		report.Print(true)
+		report.Print(breakingOnly)
 	case outputFormatJSON:
 		if err := json.NewEncoder(os.Stdout).Encode(report); err != nil {
 			log.Errorf("Failed to render output as JSON: %v", err)
