@@ -6,7 +6,7 @@ CRDiff is using the OpenAPI differ [oasdiff](https://github.com/tufin/oasdiff) t
 
 ## Features
 
-* Compare Kuberntes CRDs (apiextensions v1beta1 and v1).
+* Compare Kubernetes CRDs (apiextensions v1beta1 and v1).
 * Reports all differences and/or just breaking changes.
 * Can compare either single CRDs or entire directories recursively.
 * Output as either pretty text or nerdy JSON, depending on your needs.
